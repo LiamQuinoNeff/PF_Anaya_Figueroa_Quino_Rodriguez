@@ -1,0 +1,38 @@
+{
+  "feature_cols": [
+    "rank_home",
+    "rank_away",
+    "home_avg_goals_scored_last10",
+    "home_avg_goals_conceded_last10",
+    "home_avg_win_last10",
+    "home_avg_draw_last10",
+    "home_avg_loss_last10",
+    "away_avg_goals_scored_last10",
+    "away_avg_goals_conceded_last10",
+    "away_avg_win_last10",
+    "away_avg_draw_last10",
+    "away_avg_loss_last10",
+    "h2h_wins_home",
+    "h2h_draws",
+    "h2h_wins_away",
+    "h2h_goal_diff",
+    "h2h_n",
+    "home_attr_overall",
+    "home_attr_pace",
+    "home_attr_shooting",
+    "home_attr_defending",
+    "home_attr_physic",
+    "away_attr_overall",
+    "away_attr_pace",
+    "away_attr_shooting",
+    "away_attr_defending",
+    "away_attr_physic",
+    "neutral"
+  ],
+  "n_features": 28,
+  "target_classes": {
+    "0": "home_win",
+    "1": "draw",
+    "2": "away_win"
+  }
+}

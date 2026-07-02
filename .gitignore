@@ -1,0 +1,41 @@
+# ==============================================================================
+#  .gitignore — Sistema de Predicción e Inteligencia Deportiva · FIFA World Cup 2026
+#
+#  SÍ se versiona: código del dashboard (app.py), notebook, requirements.txt,
+#  README, tema del dashboard (.streamlit/config.toml) y los artefactos ya
+#  entrenados de outputs/  → así el dashboard corre sin reentrenar.
+#  NO se versiona: secretos, entorno virtual, datos crudos, binarios y los PDF.
+# ==============================================================================
+
+# ── Credenciales ──────────────────────────────────
+kaggle.json
+.env
+*.key
+*.pem
+
+# ── Entorno virtual de Python ────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Cachés y temporales de Python / Jupyter ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ── Datasets crudos de Kaggle (se descargan solos al ejecutar el notebook) ───
+data/
+
+# ── Binarios y logs locales ──────────────────────────────────────────────────
+cloudflared
+cloudflared.exe
+*.log
+log.txt
+
+# ── Archivos del sistema operativo / editores ────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,5 @@
+,macro_f1,weighted_f1,mae_goals_home,mae_goals_away
+Adam,0.435,0.5023,1.1036,0.8549
+SGD+Nesterov,0.4222,0.4885,1.0839,0.8407
+LSTM+Dense,0.386,0.4496,1.1122,0.8336
+GRU+Dense,0.3956,0.4612,1.0961,0.8417
