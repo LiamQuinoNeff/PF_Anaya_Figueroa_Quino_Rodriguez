@@ -13,7 +13,7 @@ de Deep Learning con un dashboard funcional que cualquier usuario no técnico pu
 ## 👥 Equipo de desarrollo
 
 | Código | Nombre |
-|---|---|---|
+|---|---|
 | U202210644 | Nathaly Eliane Anaya Vadillo |
 | U202220990 | Marsi Valeria Figueroa Larragán |
 | U20221E167 | Liam Mikael Quino Neff |
