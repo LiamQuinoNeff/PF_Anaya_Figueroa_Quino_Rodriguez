@@ -83,8 +83,6 @@ div[class*="st-key-swap_"] button { width: 100%; justify-content: flex-start; te
   border-radius: 6px; color: #eaf1fb; font-weight: 500; padding: 7px 10px;
   font-feature-settings: 'tnum'; transition: background .15s; }
 div[class*="st-key-swap_"] button:hover { background: #16294a; }
-div[class*="st-key-swap_"] button p { font-size: 13px; margin: 0; }
-/* Slot seleccionado para intercambiar (botón primario) */
 div[class*="st-key-swap_"] button[kind="primary"] { background: #c8f04a; color: #0a1628;
   border-left-color: #c8f04a; font-weight: 700; }
 
@@ -152,7 +150,7 @@ def construir_perfiles(_df):
                 "pace":            fila[f"{lado}_attr_pace"],
                 "shooting":        fila[f"{lado}_attr_shooting"],
                 "defending":       fila[f"{lado}_attr_defending"],
-                "physic":          fila[f"{lado}_attr_physic"],
+                "physic":            fila[f"{lado}_attr_physic"],
             }
     return perfiles
 
@@ -249,7 +247,9 @@ def es(nombre):
 # ── Proyección de un grupo (round-robin). Acumula por índice de puesto para que
 #    siempre devuelva una fila por selección (evita IndexError aguas abajo). ───
 def proyectar_grupo(equipos):
-    filas = [{"Selección": e, "pts": 0.0, "gf": 0.0, "ga": 0.0} for e in equipos]
+    # Initialize with 'pj' (Partidos jugados) and 'gd' (Diferencia de goles)
+    n_matches_per_team = len(equipos) - 1 # For a group of 4 teams, each plays 3 matches
+    filas = [{"Selección": e, "pts": 0.0, "gf": 0.0, "ga": 0.0, "pj": float(n_matches_per_team)} for e in equipos]
     for i in range(len(equipos)):
         for j in range(i + 1, len(equipos)):
             m = predecir(equipos[i], equipos[j])
@@ -259,9 +259,18 @@ def proyectar_grupo(equipos):
             filas[j]["pts"] += 3 * m["pB"] + m["pDraw"]
             filas[i]["gf"] += m["goalsA"]; filas[i]["ga"] += m["goalsB"]
             filas[j]["gf"] += m["goalsB"]; filas[j]["ga"] += m["goalsA"]
+
+    # Calculate goal difference and round all values
+    for f in filas:
+        f["gd"] = f["gf"] - f["ga"]
+        f["pts"] = round(f["pts"])
+        f["gf"] = round(f["gf"])
+        f["ga"] = round(f["ga"])
+        f["gd"] = round(f["gd"]) # Round goal difference to nearest integer
+
     # Probabilidad de clasificar (top-2) vía softmax sobre puntos, escalada a 2 cupos
-    pts = np.array([f["pts"] for f in filas])
-    exps = np.exp(pts / 1.15); soft = exps / exps.sum()
+    pts_for_softmax = np.array([f["pts"] for f in filas]) # Use rounded points for classification probability
+    exps = np.exp(pts_for_softmax / 1.15); soft = exps / exps.sum()
     for f, s in zip(filas, soft):
         f["Clasif."] = min(0.99, s / soft.sum() * 2)
     filas.sort(key=lambda x: x["pts"], reverse=True)
@@ -281,30 +290,46 @@ def clasificados_desde(grupos):
     clas.sort(key=lambda e: PERFILES.get(e, {}).get("rank", 999))
     return clas
 
+# Constants for knockout rounds
+RONDAS_NOMBRES = ["16vos", "Octavos", "Cuartos", "Semifinal", "Final"]
+RONDAS_MAP = {name: i for i, name in enumerate(RONDAS_NOMBRES)}
+
 # ── Simulación del cuadro por favorito (con opción de forzar un avance) ───────
-def construir_bracket(clasificados, forzados):
+def construir_bracket(clasificados, forzados_team=None, forzados_round_idx=-1):
     ronda = [(clasificados[i], clasificados[31 - i]) for i in range(16)]
-    nombres = ["32avos", "Octavos", "Cuartos", "Semifinal", "Final"]
-    rondas, ri = [], 0
+    rondas_data, ri = [], 0
     while len(ronda) >= 1:
         partidos, ganadores = [], []
         for a, b in ronda:
             m = predecir(a, b)
             if m is None:
-                gan, pa, pb, pd = a, 0.5, 0.5, 0.0   # sin datos: reparto neutro, empate 0%
+                gan = a  # Default to team A if no prediction data
+                pa, pb, pd = 0.5, 0.5, 0.0
             else:
-                forzado = forzados.get("0-forzado")
-                gan = forzado if forzado in (a, b) else (a if m["pA"] >= m["pB"] else b)
-                pa, pb, pd = m["pA"], m["pB"], m["pDraw"]   # 3 probabilidades: victoria A, victoria B y empate
+                # Check for forced winner in the current round
+                if forzados_team and ri <= forzados_round_idx:
+                    if forzados_team == a:
+                        gan = a
+                    elif forzados_team == b:
+                        gan = b
+                    else:
+                        # Forced team not in this match, proceed normally
+                        gan = (a if m["pA"] >= m["pB"] else b)
+                else:
+                    # No team forced or past the forced round, proceed normally
+                    gan = (a if m["pA"] >= m["pB"] else b)
+                pa, pb, pd = m["pA"], m["pB"], m["pDraw"]
+
             partidos.append({"a": a, "b": b, "pa": pa, "pb": pb, "pd": pd, "gan": gan})
             ganadores.append(gan)
-        rondas.append({"nombre": nombres[ri] if ri < len(nombres) else f"Ronda {ri+1}",
+
+        rondas_data.append({"nombre": RONDAS_NOMBRES[ri] if ri < len(RONDAS_NOMBRES) else f"Ronda {ri+1}",
                        "partidos": partidos})
         if len(ronda) == 1:
             break
         ronda = [(ganadores[i], ganadores[i + 1]) for i in range(0, len(ganadores), 2)]
         ri += 1
-    return rondas
+    return rondas_data
 
 # ── Propagación probabilística por todo el cuadro → top campeones ────────────
 def campeones_probables(clasificados):
@@ -336,17 +361,19 @@ def campeones_probables(clasificados):
 # ============================================================================
 #  RENDER — generadores de HTML para las piezas custom del diseño
 # ============================================================================
-def html_bracket(rondas, forzado):
+def html_bracket(rondas, forced_team_name=None):
     def fila(nombre, prob, gana):
         col = LIME if gana else MUTED
-        estrella = f"<span style='color:{AMBER};font-size:10px;margin-left:5px'>★</span>" if nombre == forzado else ""
-        return (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:8px 12px;"
-                f"background:{PANELHI if gana else 'transparent'};border-left:3px solid "
-                f"{AMBER if nombre == forzado else (LIME if gana else 'transparent')}'>"
-                f"<span style='font-size:13px;font-weight:{700 if gana else 500};"
-                f"color:{INK if gana else MUTED}'>{es(nombre)}{estrella}</span>"
-                f"<span style='font-size:11px;font-weight:700;font-family:Archivo,sans-serif;color:{col}'>"
-                f"{round(prob * 100)}%</span></div>")
+        estrella = f"<span style='color:{AMBER};font-size:10px;margin-left:5px'>★</span>" if nombre == forced_team_name else ""
+        return (
+            f"<div style='display:flex;justify-content:space-between;align-items:center;padding:8px 12px;"
+            f"background:{PANELHI if gana else 'transparent'};border-left:3px solid "
+            f"{AMBER if nombre == forced_team_name else (LIME if gana else 'transparent')}'>"
+            f"<span style='font-size:13px;font-weight:{700 if gana else 500};"
+            f"color:{INK if gana else MUTED}'>{es(nombre)}{estrella}</span>"
+            f"<span style='font-size:11px;font-weight:700;font-family:Archivo,sans-serif;color:{col}'>"
+            f"{round(prob * 100)}%</span></div>"
+        )
     cols = []
     for rnd in rondas:
         # Cada cruce muestra las TRES probabilidades del enunciado: victoria A (fila superior),
@@ -396,7 +423,8 @@ for _g, _eqs in GRUPOS_OFICIALES.items():
         st.session_state.setdefault(f"sel_{_g}_{_s}", _e)
         st.session_state.setdefault(f"shadow_{_g}_{_s}", _e)   # valor previo, para reubicar
 st.session_state.setdefault("swap_sel", None)   # (grupo, slot) marcado para intercambiar
-st.session_state.setdefault("forzados", {})
+st.session_state.setdefault("forzados_team", None)
+st.session_state.setdefault("forzados_round_idx", -1) # -1 means no round forced
 st.session_state.setdefault("_aviso", None)     # mensaje pendiente para el toast
 
 def grupos_actuales():
@@ -407,7 +435,8 @@ def restaurar_sorteo():
         for s, e in enumerate(eqs):
             st.session_state[f"sel_{g}_{s}"] = e
     st.session_state.swap_sel = None
-    st.session_state.forzados = {}
+    st.session_state.forzados_team = None
+    st.session_state.forzados_round_idx = -1
 
 def tap_swap(g, slot):
     sel = st.session_state.swap_sel
@@ -437,12 +466,19 @@ def reubicar(g, slot):
                 return
 
 def forzar_equipo():
-    eq = st.session_state.get("ff_team")
-    if eq:
-        st.session_state.forzados = {"0-forzado": eq}
+    team = st.session_state.get("ff_team")
+    round_name = st.session_state.get("ff_round")
+
+    if team and round_name:
+        st.session_state.forzados_team = team
+        st.session_state.forzados_round_idx = RONDAS_MAP.get(round_name, -1)
+    else:
+        st.session_state.forzados_team = None
+        st.session_state.forzados_round_idx = -1
 
 def limpiar_forzados():
-    st.session_state.forzados = {}
+    st.session_state.forzados_team = None
+    st.session_state.forzados_round_idx = -1
 
 
 # ============================================================================
@@ -495,16 +531,14 @@ if vista == "Fase de grupos" or vista is None:
         with cols[idx % 3]:
             with st.container(border=True):
                 st.markdown(f"<div class='wc-badge'><b>{g}</b><span>Grupo {g}</span></div>"
-                            "<div class='wc-cols'><span>Selección · Pts · Goles esp.</span><span>Clasif.</span></div>",
+                            "<div class='wc-cols'><span>Selección · PJ · GF · GC · DG · Pts</span><span>Clasif.</span></div>",
                             unsafe_allow_html=True)
                 for pos, fila in enumerate(proyecciones[g]):
                     nombre = fila["Selección"]
                     slot = grupos[g].index(nombre)
                     marcado = st.session_state.swap_sel == (g, slot)
-                    # Etiqueta de la fila: puesto · selección · puntos proyectados ·
-                    # goles esperados (a favor–en contra) · % de clasificación a la siguiente fase
-                    etiqueta = (f"{pos + 1}.  {es(nombre)}   ·   {fila['pts']:.1f} pts   "
-                                f"·   {fila['gf']:.1f}–{fila['ga']:.1f} goles   ·   {round(fila['Clasif.'] * 100)}%")
+                    # Etiqueta de la fila: puesto · selección · partidos jugados · goles a favor · goles en contra · diferencia de goles · puntos
+                    etiqueta = (f"{pos + 1}.  {es(nombre)}   ·   {int(fila['pj'])}   ·   {int(fila['gf'])}   ·   {int(fila['ga'])}   ·   {int(fila['gd'])}   ·   {int(fila['pts'])} pts")
                     st.button(etiqueta, key=f"swap_{g}_{slot}", on_click=tap_swap, args=(g, slot),
                               width="stretch", type="primary" if marcado else "secondary")
                 with st.expander("✎ Editar selecciones"):
@@ -521,26 +555,34 @@ if vista == "Fase de grupos" or vista is None:
 # ── VISTA 2: ELIMINACIÓN DIRECTA ─────────────────────────────────────────────
 elif vista == "Eliminación directa":
     st.markdown(
-        "<p class='wc-lead'>Cuadro de eliminación simulado con el modelo, desde 32avos hasta la "
-        "final. Usa el panel para <strong>forzar el avance</strong> de una selección y ver cómo se "
-        "reconfigura el cuadro desde ahí.</p>", unsafe_allow_html=True)
+        "<p class='wc-lead'>Cuadro de eliminación simulado con el modelo, desde 16vos hasta la "
+        "final. Usa el panel para <strong>forzar el avance</strong> de una selección hasta una ronda "
+        "específica y ver cómo se reconfigura el cuadro desde ahí.</p>", unsafe_allow_html=True)
 
     clasificados = clasificados_desde(grupos)
-    rondas = construir_bracket(clasificados, st.session_state.forzados)
+    rondas = construir_bracket(clasificados, st.session_state.forzados_team, st.session_state.forzados_round_idx)
     campeon = rondas[-1]["partidos"][0]["gan"]
-    forzado = st.session_state.forzados.get("0-forzado")
+    forced_team_name = st.session_state.forzados_team
 
     st.markdown(f"<div class='wc-champ'><span class='lbl'>Campeón proyectado</span>"
                 f"<span class='name'>{es(campeon)}</span></div>", unsafe_allow_html=True)
 
     with st.expander("Forzar el avance de una selección"):
-        c1, c2, c3 = st.columns([3, 1, 1])
-        c1.selectbox("Selección que avanza", clasificados, key="ff_team",
-                     format_func=es, label_visibility="collapsed")
-        c2.button("Forzar", on_click=forzar_equipo, width="stretch")
-        c3.button("Limpiar", on_click=limpiar_forzados, width="stretch")
+        c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
+        with c1:
+            st.selectbox("Selección que avanza", clasificados,
+                         key="ff_team",
+                         format_func=es, label_visibility="collapsed")
+        with c2:
+            st.selectbox("Hasta la ronda", RONDAS_NOMBRES,
+                         key="ff_round",
+                         label_visibility="collapsed")
+        with c3:
+            st.button("Forzar", on_click=forzar_equipo, width="stretch")
+        with c4:
+            st.button("Limpiar", on_click=limpiar_forzados, width="stretch")
 
-    st.markdown(html_bracket(rondas, forzado), unsafe_allow_html=True)
+    st.markdown(html_bracket(rondas, forced_team_name), unsafe_allow_html=True)
 
 # ── VISTA 3: CAMPEONES PROBABLES ─────────────────────────────────────────────
 else:
