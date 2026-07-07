@@ -38,13 +38,13 @@ Se entrenan y comparan **dos arquitecturas** sobre el mismo test set (Mundial 20
 
 | Arquitectura | Descripción | F1 macro | F1 ponderado |
 |---|---|---|---|
-| **MLP (Adam)** ⭐ | Red densa multi-salida (4 capas ocultas ReLU, L2 + Dropout) | **0.435** | **0.502** |
-| MLP (SGD+Nesterov) | Misma red, optimizador SGD con momentum | 0.422 | 0.489 |
-| LSTM + Dense | Rama recurrente siamesa sobre la secuencia de 10 partidos | 0.386 | 0.450 |
-| GRU + Dense | Igual que LSTM, capa GRU (más rápida, menos parámetros) | 0.396 | 0.461 |
+| MLP (Adam) | Red densa multi-salida (4 capas ocultas ReLU, L2 + Dropout) | 0.379 | 0.443 |
+| **MLP (SGD+Nesterov)** ⭐ | Misma red, optimizador SGD con momentum | **0.409** | **0.475** |
+| LSTM + Dense | Rama recurrente siamesa sobre la secuencia de 10 partidos | 0.393 | 0.459 |
+| GRU + Dense | Igual que LSTM, capa GRU (más rápida, menos parámetros) | 0.386 | 0.445 |
 
 Se documenta además el problema de ***vanishing gradient*** con la ecuación de BPTT y evidencia
-empírica (SimpleRNN vs LSTM). El **MLP con Adam** es el modelo elegido para el simulador por su
+empírica (SimpleRNN vs LSTM). El **MLP con SGD + Nesterov** es el modelo elegido para el simulador por su
 mayor F1 y su inferencia más simple y rápida (ideal para el recálculo en tiempo real).
 
 ### 2. Simulador del torneo (dashboard)
@@ -53,6 +53,8 @@ Dashboard interactivo en español (Streamlit) con tres vistas, todas recalculand
 - **Eliminación directa** — bracket completo (32avos → final) con el favorito de cada cruce, las tres
   probabilidades por partido (victoria A · empate · victoria B) y opción de **forzar** el avance de una selección.
 - **Campeones probables** — top 10 con probabilidad de título y contexto histórico de mundiales ganados.
+
+Versión desplegada en Streamlit: [https://pfanayafigueroaquinorodriguez-nwmp9lhd6gpyhrwmpbrqow.streamlit.app/](https://pfanayafigueroaquinorodriguez-nwmp9lhd6gpyhrwmpbrqow.streamlit.app/)
 
 ---
 
